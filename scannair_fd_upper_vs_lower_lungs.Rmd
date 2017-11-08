@@ -1,0 +1,265 @@
+---
+title: "Describe and compare upper and lower lung parameters."
+output: html_notebook
+---
+
+
+
+Load up packages.
+```{r}
+pacman::p_load(tidyr, dplyr, ggplot2, plyr, nlme, reshape2, FactoMineR, BSDA)
+```
+
+Get the data.
+```{r}
+raw_data <- read.csv2("C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/FD_data/Expi.csv")
+raw_data2 <- read.csv("C:/Users/csuehs/Dropbox/SCANN'AIR_princeps/data-verification/Data_scannair_NA_corrections_isaetcarey_20170427.csv")
+
+
+```
+
+Extract the appropriate variables. We are interested in raw FD values for attentuation at -850HU and according to two factors: 
+
+* inspiratory versus expiratory measures;
+* upper versus lower lung.
+      ---slice 1
+      ---slice 10
+```{r}
+
+df_fd <- data.frame(raw_data$numpat,
+                  raw_data$I.850.H1,
+                  raw_data$I.850.H10,
+                  raw_data$I.850.L1,
+                  raw_data$I.850.L10,
+                  raw_data$E.850.H1,
+                  raw_data$E.850.H10,
+                  raw_data$E.850.L1,
+                  raw_data$E.850.L10)
+
+colnames(df_fd) <- c("patient",
+                   "fd_i_up_1", 
+                    "fd_i_up_10", 
+                    "fd_i_lo_1", 
+                    "fd_i_lo_10", 
+                    "fd_e_up_1", 
+                    "fd_e_up_10", 
+                    "fd_e_lo_1", 
+                    "fd_e_lo_10")
+
+
+
+df_fd$fd_ei_up_1 <- df_fd$fd_e_up_1 / df_fd$fd_i_up_1
+df_fd$fd_ei_up_10 <- df_fd$fd_e_up_10 / df_fd$fd_i_up_10
+
+df_fd$fd_ei_lo_1 <- df_fd$fd_e_lo_1 / df_fd$fd_i_lo_1
+df_fd$fd_ei_lo_10 <- df_fd$fd_e_lo_10 / df_fd$fd_i_lo_10
+
+
+df_fd$fd_i_up <- (df_fd$fd_i_up_1 + df_fd$fd_i_up_10)/2
+df_fd$fd_i_lo <- (df_fd$fd_i_lo_1 + df_fd$fd_i_lo_10)/2
+
+df_fd$fd_e_up <- (df_fd$fd_e_up_1 + df_fd$fd_e_up_10)/2
+df_fd$fd_e_lo <- (df_fd$fd_e_lo_1 + df_fd$fd_e_lo_10)/2
+
+df_fd$fd_ei_up <- (df_fd$fd_ei_up_1+df_fd$fd_ei_up_10)/2
+df_fd$fd_ei_lo <- (df_fd$fd_ei_lo_1+df_fd$fd_ei_lo_10)/2
+
+df_fd$fd_i_delta <- df_fd$fd_i_up - df_fd$fd_i_lo  
+df_fd$fd_e_delta <- df_fd$fd_e_up - df_fd$fd_e_lo 
+df_fd$fd_ei_delta <- df_fd$fd_ei_up - df_fd$fd_ei_lo 
+
+df_fd$fd_i_av <- (df_fd$fd_i_up + df_fd$fd_i_lo) /2
+df_fd$fd_e_av <- (df_fd$fd_e_up + df_fd$fd_e_lo) /2
+df_fd$fd_ei_av <- (df_fd$fd_ei_up + df_fd$fd_ei_lo) /2
+
+df_fd$fd_i_bias <- (df_fd$fd_i_delta / df_fd$fd_i_av) *100
+df_fd$fd_e_bias <- (df_fd$fd_e_delta / df_fd$fd_e_av) *100
+df_fd$fd_ei_bias <- (df_fd$fd_ei_delta / df_fd$fd_ei_av) *100
+
+df_fd[,grep("_1", names(df_fd))] <- NULL
+df_fd[,grep("delta", names(df_fd))] <- NULL
+df_fd[,grep("av2", names(df_fd))] <- NULL
+
+
+head(df_fd)
+
+```
+
+Extract the appropriate MLD variables.
+```{r}
+df_mld <- data.frame(raw_data2$numpat,
+                     raw_data2$I_MLD_H_1,
+                     raw_data2$I_MLD_B_1,
+                     raw_data2$E_MLD_H_1,
+                     raw_data2$E_MLD_B_1)
+    
+
+colnames(df_mld) <- c("patient",
+                      "mld_i_up",
+                      "mld_i_lo",
+                      "mld_e_up",
+                      "mld_e_lo")
+
+df_mld$mld_ei_up <- df_mld$mld_e_up/df_mld$mld_i_up
+df_mld$mld_ei_lo <- df_mld$mld_e_lo/df_mld$mld_i_lo
+
+df_mld$mld_i_delta <- df_mld$mld_i_up - df_mld$mld_i_lo 
+df_mld$mld_e_delta <- df_mld$mld_e_up - df_mld$mld_e_lo 
+df_mld$mld_ei_delta <- df_mld$mld_ei_up - df_mld$mld_ei_lo 
+
+df_mld$mld_i_av <- (df_mld$mld_i_up + df_mld$mld_i_lo)/2 
+df_mld$mld_e_av <- (df_mld$mld_e_up + df_mld$mld_e_lo)/2
+df_mld$mld_ei_av <- (df_mld$mld_ei_up + df_mld$mld_ei_lo)/2
+
+df_mld$mld_i_bias <- (df_mld$mld_i_delta / df_mld$mld_i_av) *100
+df_mld$mld_e_bias <- (df_mld$mld_e_delta / df_mld$mld_e_av) *100
+df_mld$mld_ei_bias <- (df_mld$mld_ei_delta / df_mld$mld_ei_av) *100
+
+df_mld[,grep("delta", names(df_mld))] <- NULL
+
+head(df_mld)
+
+```
+
+Describe the centrality and distribution of fd measures.
+```{r}
+temp <- df_fd
+temp$patient <- NULL
+
+eff <- function(x) {length(which(!is.na(x)))}
+quartile_1 <- function(x) {quantile(x, probs = seq(0,1,0.25), na.rm = TRUE)[2]}
+quartile_3 <- function(x) {quantile(x, probs = seq(0,1,0.25), na.rm = TRUE)[4]}
+shap <- function(x) {as.numeric(shapiro.test(x)[2])}
+
+count<- sapply(temp, eff)
+minimum <- sapply(temp, min, na.rm = TRUE)
+maximum <- sapply(temp, max, na.rm = TRUE)
+mean <- sapply(temp, mean, na.rm = TRUE)
+st_d <- sapply(temp, sd, na.rm = TRUE)
+median <- sapply(temp, median, na.rm = TRUE)
+quartile_25p <- sapply(temp, quartile_1)
+quartile_75p <- sapply(temp, quartile_3)
+shapiro_p <- sapply(temp, shap)
+
+options(scipen = 999)
+descriptive_total_pop <- data.frame(count, minimum, maximum, mean, 
+                     st_d, median, quartile_25p, quartile_75p, shapiro_p)
+
+rm(count, minimum, maximum, mean, st_d, median, quartile_25p, quartile_75p, shapiro_p)
+
+write.csv(descriptive_total_pop, file = "C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/Submission2_Investigative_Radiology/stats-tables/fd_descriptive_data_total_population.csv")
+
+write.csv2(descriptive_total_pop, file = "C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/Submission2_Investigative_Radiology/stats-tables/fd_descriptive_data_total_population_csv2.csv")
+
+rm(temp)
+
+descriptive_total_pop
+```
+
+Describe the centrality and distribution of mld measures.
+```{r}
+temp <- df_mld
+temp$patient <- NULL
+
+count<- sapply(temp, eff)
+minimum <- sapply(temp, min, na.rm = TRUE)
+maximum <- sapply(temp, max, na.rm = TRUE)
+mean <- sapply(temp, mean, na.rm = TRUE)
+st_d <- sapply(temp, sd, na.rm = TRUE)
+median <- sapply(temp, median, na.rm = TRUE)
+quartile_25p <- sapply(temp, quartile_1)
+quartile_75p <- sapply(temp, quartile_3)
+shapiro_p <- sapply(temp, shap)
+
+options(scipen = 999)
+descriptive_total_pop <- data.frame(count, minimum, maximum, mean, 
+                     st_d, median, quartile_25p, quartile_75p, shapiro_p)
+
+rm(count, minimum, maximum, mean, st_d, median, quartile_25p, quartile_75p, shapiro_p)
+
+write.csv(descriptive_total_pop, file = "C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/Submission2_Investigative_Radiology/stats-tables/mld_descriptive_data_total_population.csv")
+
+write.csv2(descriptive_total_pop, file = "C:/Users/csuehs/Dropbox/SCANN'AIR_fractal_dimension/Submission2_Investigative_Radiology/stats-tables/mld_descriptive_data_total_population_csv2.csv")
+
+rm(temp)
+
+descriptive_total_pop
+```
+
+
+Compare upper and lower lungs (paired tests)
+
+```{r}
+
+t.test(x = df_mld$mld_i_up, y = df_mld$mld_i_lo, paired = TRUE)
+t.test(x = df_mld$mld_e_up, y = df_mld$mld_e_lo, paired = TRUE)
+t.test(x = df_mld$mld_ei_up, y = df_mld$mld_ei_lo, paired = TRUE)
+
+
+wilcox.test(x = df_fd$fd_i_up, y = df_fd$fd_i_lo, paired = TRUE)
+wilcox.test(x = df_fd$fd_e_up, y = df_fd$fd_e_lo, paired = TRUE)
+wilcox.test(x = df_fd$fd_ei_up, y = df_fd$fd_ei_lo, paired = TRUE)
+```
+
+
+
+
+Get the proportions of zeros in variables.
+```{r}
+
+trap_i_up <- df_fd$fd_i_up
+trap_i_up[trap_i_up > 0] <- "yes"
+trap_i_up[trap_i_up == 0] <- "no"
+
+trap_e_up <- df_fd$fd_e_up
+trap_e_up[trap_e_up > 0] <- "yes"
+trap_e_up[trap_e_up == 0] <- "no"
+
+trap_i_lo <- df_fd$fd_i_lo
+trap_i_lo[trap_i_lo > 0] <- "yes"
+trap_i_lo[trap_i_lo == 0] <- "no"
+
+trap_e_lo <- df_fd$fd_e_lo
+trap_e_lo[trap_e_lo > 0] <- "yes"
+trap_e_lo[trap_e_lo == 0] <- "no"
+
+```
+
+Upper versus lower tests for proportion airtrapping detection.
+
+```{r}
+
+mcnemar.test(x = trap_e_up, y = trap_e_lo)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
